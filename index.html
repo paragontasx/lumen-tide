@@ -1,0 +1,1748 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#03060b">
+<meta name="description" content="Lumen Tide — a real-time WebGL2 bioluminescent sea you can conduct. Paint currents, drop stones, summon whirlpools, and let the score stir the water.">
+<title>Lumen Tide — a sea you can conduct</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,300;0,500;1,300&family=Space+Grotesk:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --serif:'Fraunces','Didot','Bodoni MT','Times New Roman',serif;
+  --sans:'Space Grotesk','Space Mono',ui-monospace,'Segoe UI',sans-serif;
+  --ease:cubic-bezier(.22,1,.36,1);
+  --ink:#eaf6ff;
+  --dim:rgba(234,246,255,.42);
+  --tint:rgba(96,206,255,.14);
+  --accent:#8fe6ff;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:#03060b;color:var(--ink);font-family:var(--sans);font-weight:300;
+  overflow:hidden;-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent}
+body{
+  background:
+    radial-gradient(130% 95% at 50% 118%, var(--tint), transparent 62%),
+    radial-gradient(80% 70% at 50% -22%, rgba(96,120,255,.10), transparent 55%),
+    #03060b;
+  transition:background 1.6s ease;
+}
+#c{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:crosshair;background:transparent}
+
+/* ---------- atmosphere ---------- */
+.grain{position:fixed;inset:0;pointer-events:none;z-index:3;opacity:.05;mix-blend-mode:overlay;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
+  background-size:220px 220px}
+.vignette{position:fixed;inset:0;pointer-events:none;z-index:2;
+  background:radial-gradient(ellipse at 50% 46%, transparent 42%, rgba(1,3,7,.62) 100%)}
+.flash{position:fixed;inset:0;pointer-events:none;z-index:4;opacity:0;
+  background:radial-gradient(ellipse at var(--fx,50%) var(--fy,38%), rgba(226,244,255,.92), rgba(150,205,255,.30) 26%, transparent 62%)}
+.flash.fire{animation:zap .78s var(--ease) both}
+@keyframes zap{0%{opacity:0}5%{opacity:.95}11%{opacity:.08}17%{opacity:.82}26%{opacity:.05}34%{opacity:.35}48%,100%{opacity:0}}
+
+/* baton — the conductor's hand */
+.baton{position:fixed;top:0;left:0;width:38px;height:38px;border-radius:50%;pointer-events:none;z-index:4;
+  border:1px solid rgba(180,230,255,.55);box-shadow:0 0 22px rgba(120,210,255,.35), inset 0 0 14px rgba(120,210,255,.18);
+  transform:translate3d(-100px,-100px,0) scale(.4);opacity:0;transition:opacity .45s ease, border-color .3s ease}
+.baton.live{opacity:.85}
+.baton.held{border-color:rgba(255,232,180,.85);box-shadow:0 0 30px rgba(255,214,140,.45), inset 0 0 18px rgba(255,214,140,.22)}
+
+/* ---------- chrome ---------- */
+.brand{position:fixed;top:1.5rem;left:1.8rem;z-index:6;display:flex;flex-direction:column;gap:.34rem;pointer-events:none}
+.brand-name{font-family:var(--serif);font-style:italic;font-weight:300;font-size:clamp(1.25rem,2.1vw,1.7rem);letter-spacing:.07em;
+  text-shadow:0 0 26px rgba(150,225,255,.35)}
+.brand-meta{font-size:.6rem;letter-spacing:.34em;text-transform:uppercase;color:var(--dim);display:flex;gap:.75rem;align-items:baseline}
+.brand-meta b{font-weight:400;color:rgba(234,246,255,.72)}
+
+.meta{position:fixed;top:1.5rem;right:1.8rem;z-index:6;display:flex;align-items:center;gap:1rem;pointer-events:none}
+.moon{width:20px;height:20px;border-radius:50%;position:relative;background:radial-gradient(circle at 38% 34%, #fdfeff, #cfe4f2 55%, #8fb4cc);
+  box-shadow:0 0 16px rgba(200,232,255,.55);overflow:hidden;flex:none}
+.moon::after{content:'';position:absolute;inset:-2px;border-radius:50%;
+  background:#04070d;transform:translateX(calc((var(--m,1) * 200% ) - 100%));transition:transform .6s var(--ease);opacity:.92}
+.meta-label{font-size:.58rem;letter-spacing:.3em;text-transform:uppercase;color:var(--dim)}
+#spark{width:104px;height:24px;opacity:.95;filter:drop-shadow(0 0 8px rgba(120,210,255,.35))}
+
+.hud{position:fixed;left:50%;bottom:1.3rem;transform:translateX(-50%);z-index:6;display:flex;align-items:center;gap:.5rem;
+  flex-wrap:wrap;justify-content:center;max-width:min(94vw,1080px);font-size:.6rem;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--dim);text-shadow:0 1px 14px rgba(0,0,0,.7)}
+.hud .sep{opacity:.3;margin:0 -.08rem}
+.hud .tag{display:inline-flex;align-items:center;gap:.4rem;white-space:nowrap}
+kbd{font-family:var(--sans);font-size:.56rem;letter-spacing:.12em;padding:.16rem .38rem;border-radius:.3rem;
+  border:1px solid rgba(160,210,235,.28);background:rgba(140,200,235,.07);color:rgba(234,246,255,.78)}
+.hb{appearance:none;background:none;border:0;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit;
+  cursor:pointer;display:inline-flex;align-items:center;gap:.4rem;padding:.2rem .1rem;opacity:.85;transition:opacity .25s ease,color .25s ease}
+.hb:hover{opacity:1;color:rgba(234,246,255,.95)}
+.hb.off{opacity:.38}
+.eq{display:inline-flex;align-items:flex-end;gap:2px;height:.72rem}
+.eq i{display:block;width:2px;height:30%;background:var(--accent);border-radius:1px;animation:eq .9s ease-in-out infinite alternate}
+.eq i:nth-child(2){animation-duration:.62s;height:80%}
+.eq i:nth-child(3){animation-duration:1.15s;height:52%}
+@keyframes eq{from{transform:scaleY(.28)}to{transform:scaleY(1)}}
+body.silent .eq i{animation-play-state:paused;opacity:.35}
+
+.tide-log{position:fixed;left:1.8rem;bottom:1.5rem;z-index:6;max-width:min(42ch,50vw);pointer-events:none;
+  font-family:var(--serif);font-style:italic;font-weight:300;font-size:clamp(.86rem,1.35vw,1.06rem);
+  color:rgba(234,246,255,.5);letter-spacing:.02em;line-height:1.45;transition:opacity .8s ease,transform .9s var(--ease)}
+.tide-log.swap{opacity:0;transform:translateY(6px)}
+
+.toast{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%) scale(.95);z-index:7;pointer-events:none;
+  font-family:var(--serif);font-style:italic;font-weight:300;font-size:clamp(1.9rem,5.6vw,4.2rem);letter-spacing:.1em;text-indent:.1em;
+  opacity:0;text-shadow:0 0 44px rgba(150,225,255,.45);transition:opacity .55s ease,transform .85s var(--ease)}
+.toast.show{opacity:1;transform:translate(-50%,-50%) scale(1)}
+
+.intro{position:fixed;inset:0;z-index:8;display:grid;place-content:center;justify-content:center;text-align:center;gap:.9rem;
+  background:radial-gradient(ellipse at 50% 55%, rgba(4,9,18,.34), rgba(2,4,9,.82) 78%);
+  transition:opacity 1.1s ease,visibility 1.1s}
+.intro.hide{opacity:0;visibility:hidden;pointer-events:none}
+.intro h1{font-family:var(--serif);font-style:italic;font-weight:300;font-size:clamp(2.6rem,8.4vw,6.4rem);letter-spacing:.08em;
+  text-shadow:0 0 60px rgba(140,220,255,.3)}
+.intro .tagline{font-size:.7rem;letter-spacing:.42em;text-transform:uppercase;color:var(--dim)}
+.intro .hint{margin-top:1.4rem;font-size:.6rem;letter-spacing:.34em;text-transform:uppercase;color:rgba(234,246,255,.34);
+  animation:breathe 3.4s ease-in-out infinite}
+@keyframes breathe{0%,100%{opacity:.28}50%{opacity:.8}}
+
+.nogl{position:fixed;inset:0;z-index:10;display:grid;place-content:center;justify-content:center;text-align:center;padding:2rem;gap:.7rem;
+  background:radial-gradient(ellipse at 26% 18%, rgba(20,58,88,.9), transparent 60%),radial-gradient(ellipse at 76% 84%, rgba(12,44,66,.9), transparent 60%),#03060b}
+.nogl[hidden]{display:none}
+.nogl h2{font-family:var(--serif);font-weight:300;font-size:2.1rem;font-style:italic}
+.nogl p{opacity:.66;max-width:46ch;line-height:1.65;font-size:.9rem}
+
+body.hide-ui .hud,body.hide-ui .brand,body.hide-ui .meta,body.hide-ui .tide-log{opacity:0;pointer-events:none;transition:opacity .6s ease}
+
+@media (max-width:920px){
+  .desk{display:none}
+  .tide-log{max-width:min(60vw,30ch);bottom:3.6rem}
+  .meta{top:1.1rem;right:1.1rem;gap:.6rem}
+  .brand{top:1.1rem;left:1.1rem}
+  .hud{bottom:.9rem;gap:.45rem;font-size:.6rem}
+}
+@media (prefers-reduced-motion:reduce){
+  .intro .hint,.eq i{animation:none}
+  .flash.fire{animation-duration:.01s}
+}
+</style>
+</head>
+<body>
+<canvas id="c" aria-label="Interactive bioluminescent fluid sea"></canvas>
+<div class="vignette" aria-hidden="true"></div>
+<div class="grain" aria-hidden="true"></div>
+<div class="flash" id="flash" aria-hidden="true"></div>
+<div class="baton" id="baton" aria-hidden="true"></div>
+
+<header class="brand" aria-hidden="true">
+  <span class="brand-name">Lumen Tide</span>
+  <span class="brand-meta"><span>palette <b id="palName">Abyss</b></span><span id="musicName">♪ Swell</span><span id="reactName">◐ tide-link on</span></span>
+</header>
+
+<div class="meta" aria-hidden="true">
+  <span class="meta-label">moon</span>
+  <div class="moon" id="moon" style="--m:.72"></div>
+  <canvas id="spark" width="192" height="44"></canvas>
+</div>
+
+<div class="intro" id="intro">
+  <h1>Lumen Tide</h1>
+  <p class="tagline">a sea you can conduct</p>
+  <span class="hint">touch the water to begin</span>
+</div>
+
+<div class="hud" id="hud">
+  <button class="hb" id="btnSound" type="button" aria-pressed="true"><span class="eq" aria-hidden="true"><i></i><i></i><i></i></span><kbd>M</kbd>sound</button>
+  <span class="sep">·</span>
+  <button class="hb" id="btnMusic" type="button"><kbd>N</kbd>score</button>
+  <span class="sep">·</span>
+  <button class="hb" id="btnReact" type="button" aria-pressed="true"><kbd>R</kbd>tide-link</button>
+  <span class="sep">·</span>
+  <button class="hb" id="btnMotes" type="button" aria-pressed="true"><kbd>T</kbd>motes</button>
+  <span class="sep">·</span>
+  <span class="tag">drag · current</span>
+  <span class="sep">·</span>
+  <span class="tag">tap · stone</span>
+  <span class="sep">·</span>
+  <span class="tag">hold · whirlpool</span>
+  <span class="sep desk">·</span>
+  <span class="tag desk"><kbd>Space</kbd>storm</span>
+  <span class="sep desk">·</span>
+  <span class="tag desk"><kbd>P</kbd>palette</span>
+  <span class="sep desk">·</span>
+  <span class="tag desk"><kbd>[ ]</kbd>moon</span>
+  <span class="sep desk">·</span>
+  <span class="tag desk"><kbd>C</kbd>calm</span>
+  <span class="sep desk">·</span>
+  <span class="tag desk"><kbd>S</kbd>save</span>
+  <span class="sep desk">·</span>
+  <span class="tag desk"><kbd>F</kbd>fullscreen</span>
+  <span class="sep desk">·</span>
+  <span class="tag desk"><kbd>H</kbd>hide</span>
+</div>
+
+<p class="tide-log" id="tideLog" aria-live="polite">the sea is waiting for your hand</p>
+
+<div class="toast" id="toast" aria-live="polite"></div>
+
+<div class="nogl" id="nogl" hidden>
+  <h2>Lumen Tide needs WebGL 2</h2>
+  <p>This piece breathes through a real-time fluid simulation on your graphics card. Please open it in a current Chrome, Firefox, Safari or Edge with hardware acceleration switched on.</p>
+</div>
+
+<script>
+(() => {
+'use strict';
+
+/* ============================================================
+   PALETTES — six moods of water
+   ============================================================ */
+const PALETTES = [
+  { name:'Abyss',    h0:0.55, h1:0.70, s:0.86, tint:'rgba(96,206,255,0.14)' },
+  { name:'Plankton', h0:0.30, h1:0.52, s:0.94, tint:'rgba(86,255,196,0.14)' },
+  { name:'Coral',    h0:0.92, h1:0.13, s:0.88, tint:'rgba(255,138,140,0.13)' },
+  { name:'Moonlit',  h0:0.57, h1:0.66, s:0.22, tint:'rgba(206,228,246,0.12)' },
+  { name:'Solar',    h0:0.06, h1:0.17, s:0.98, tint:'rgba(255,186,96,0.13)'  },
+  { name:'Iris',     h0:0.00, h1:1.00, s:1.00, tint:'rgba(186,150,255,0.13)' },
+];
+let palIndex = 0;
+let palette  = PALETTES[0];
+
+function hsv(h, s, v) {
+  h = ((h % 1) + 1) % 1;
+  const i = Math.floor(h * 6), f = h * 6 - i;
+  const p = v * (1 - s), q = v * (1 - f * s), t = v * (1 - (1 - f) * s);
+  let r, g, b;
+  switch (i % 6) {
+    case 0: r = v; g = t; b = p; break;
+    case 1: r = q; g = v; b = p; break;
+    case 2: r = p; g = v; b = t; break;
+    case 3: r = p; g = q; b = v; break;
+    case 4: r = t; g = p; b = v; break;
+    default: r = v; g = p; b = q;
+  }
+  return { r, g, b };
+}
+function ramp(u, intensity = 0.16) {
+  const h = palette.h0 + (palette.h1 - palette.h0) * (((u % 1) + 1) % 1);
+  const c = hsv(h, palette.s, 1);
+  return { r: c.r * intensity, g: c.g * intensity, b: c.b * intensity };
+}
+const hueOf = u => palette.h0 + (palette.h1 - palette.h0) * (((u % 1) + 1) % 1);
+
+/* ============================================================
+   CANVAS + GL
+   ============================================================ */
+const canvas = document.getElementById('c');
+const gl = canvas.getContext('webgl2', {
+  alpha: false, depth: false, stencil: false, antialias: false,
+  preserveDrawingBuffer: false, powerPreference: 'high-performance'
+});
+if (!gl) { document.getElementById('nogl').hidden = false; return; }
+
+const extFloat = gl.getExtension('EXT_color_buffer_float');
+const extHalf  = extFloat ? null : gl.getExtension('EXT_color_buffer_half_float');
+if (!extFloat && !extHalf) { document.getElementById('nogl').hidden = false; return; }
+gl.getExtension('OES_texture_float_linear');
+
+const HALF = gl.HALF_FLOAT;
+function renderable(internal, format, type) {
+  const tex = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, tex);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+  gl.texImage2D(gl.TEXTURE_2D, 0, internal, 4, 4, 0, format, type || HALF, null);
+  const fbo = gl.createFramebuffer();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+  const ok = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  gl.deleteFramebuffer(fbo); gl.deleteTexture(tex);
+  return ok;
+}
+const FMT_RGBA = { internal: gl.RGBA16F, format: gl.RGBA };
+if (!renderable(FMT_RGBA.internal, FMT_RGBA.format)) { document.getElementById('nogl').hidden = false; return; }
+const FMT_RG = renderable(gl.RG16F, gl.RG) ? { internal: gl.RG16F, format: gl.RG } : FMT_RGBA;
+const FMT_R  = renderable(gl.R16F,  gl.RED) ? { internal: gl.R16F, format: gl.RED } : FMT_RG;
+const FMT_PART = renderable(gl.RGBA32F, gl.RGBA, gl.FLOAT)
+  ? { internal: gl.RGBA32F, format: gl.RGBA, type: gl.FLOAT }
+  : FMT_RGBA;
+
+/* ============================================================
+   SHADERS
+   ============================================================ */
+const VERT_BLIT = `#version 300 es
+precision highp float;
+layout(location=0) in vec2 aPos;
+out vec2 vUv; out vec2 vL; out vec2 vR; out vec2 vT; out vec2 vB;
+uniform vec2 texelSize;
+void main(){
+  vUv = aPos * 0.5 + 0.5;
+  vL = vUv - vec2(texelSize.x, 0.0);
+  vR = vUv + vec2(texelSize.x, 0.0);
+  vT = vUv + vec2(0.0, texelSize.y);
+  vB = vUv - vec2(0.0, texelSize.y);
+  gl_Position = vec4(aPos, 0.0, 1.0);
+}`;
+
+const HEAD = `#version 300 es
+precision highp float; precision highp sampler2D;
+in vec2 vUv; in vec2 vL; in vec2 vR; in vec2 vT; in vec2 vB;
+out vec4 fragColor;
+`;
+
+const F_COPY = HEAD + `
+uniform sampler2D uTexture;
+void main(){ fragColor = texture(uTexture, vUv); }`;
+
+const F_CLEAR = HEAD + `
+uniform sampler2D uTexture; uniform float value;
+void main(){ fragColor = value * texture(uTexture, vUv); }`;
+
+const F_SPLAT = HEAD + `
+uniform sampler2D uTarget; uniform float aspectRatio; uniform vec3 color; uniform vec2 point; uniform float radius;
+void main(){
+  vec2 p = vUv - point; p.x *= aspectRatio;
+  vec3 s = exp(-dot(p, p) / radius) * color;
+  fragColor = vec4(texture(uTarget, vUv).xyz + s, 1.0);
+}`;
+
+const F_ADVECT = HEAD + `
+uniform sampler2D uVelocity; uniform sampler2D uSource; uniform vec2 texelSize; uniform float dt; uniform float dissipation;
+void main(){
+  vec2 coord = vUv - dt * texture(uVelocity, vUv).xy * texelSize;
+  fragColor = texture(uSource, coord) / (1.0 + dissipation * dt);
+}`;
+
+const F_DIVERGE = HEAD + `
+uniform sampler2D uVelocity;
+void main(){
+  float L = texture(uVelocity, vL).x; float R = texture(uVelocity, vR).x;
+  float T = texture(uVelocity, vT).y; float B = texture(uVelocity, vB).y;
+  vec2  C = texture(uVelocity, vUv).xy;
+  if (vL.x < 0.0) L = -C.x;
+  if (vR.x > 1.0) R = -C.x;
+  if (vT.y > 1.0) T = -C.y;
+  if (vB.y < 0.0) B = -C.y;
+  fragColor = vec4(0.5 * (R - L + T - B), 0.0, 0.0, 1.0);
+}`;
+
+const F_CURL = HEAD + `
+uniform sampler2D uVelocity;
+void main(){
+  float L = texture(uVelocity, vL).y; float R = texture(uVelocity, vR).y;
+  float T = texture(uVelocity, vT).x; float B = texture(uVelocity, vB).x;
+  fragColor = vec4(0.5 * ((R - L) - (T - B)), 0.0, 0.0, 1.0);
+}`;
+
+const F_VORT = HEAD + `
+uniform sampler2D uVelocity; uniform sampler2D uCurl; uniform float curl; uniform float dt;
+void main(){
+  float L = texture(uCurl, vL).x; float R = texture(uCurl, vR).x;
+  float T = texture(uCurl, vT).x; float B = texture(uCurl, vB).x;
+  float C = texture(uCurl, vUv).x;
+  vec2 force = 0.5 * vec2(abs(T) - abs(B), abs(R) - abs(L));
+  force /= length(force) + 1e-4;
+  force *= curl * C;
+  force.y *= -1.0;
+  vec2 vel = texture(uVelocity, vUv).xy + force * dt;
+  fragColor = vec4(clamp(vel, -1200.0, 1200.0), 0.0, 1.0);
+}`;
+
+const F_PRESSURE = HEAD + `
+uniform sampler2D uPressure; uniform sampler2D uDivergence;
+void main(){
+  float L = texture(uPressure, vL).x; float R = texture(uPressure, vR).x;
+  float T = texture(uPressure, vT).x; float B = texture(uPressure, vB).x;
+  float div = texture(uDivergence, vUv).x;
+  fragColor = vec4((L + R + B + T - div) * 0.25, 0.0, 0.0, 1.0);
+}`;
+
+const F_GRADIENT = HEAD + `
+uniform sampler2D uPressure; uniform sampler2D uVelocity;
+void main(){
+  float L = texture(uPressure, vL).x; float R = texture(uPressure, vR).x;
+  float T = texture(uPressure, vT).x; float B = texture(uPressure, vB).x;
+  fragColor = vec4(texture(uVelocity, vUv).xy - vec2(R - L, T - B), 0.0, 1.0);
+}`;
+
+const F_BLOOMPRE = HEAD + `
+uniform sampler2D uTexture; uniform vec3 curve; uniform float threshold;
+void main(){
+  vec3 c = texture(uTexture, vUv).rgb;
+  float br = max(c.r, max(c.g, c.b));
+  float rq = clamp(br - curve.x, 0.0, curve.y);
+  rq = curve.z * rq * rq;
+  c *= max(rq, br - threshold) / max(br, 1e-4);
+  fragColor = vec4(c, 0.0);
+}`;
+
+const F_BLUR = HEAD + `
+uniform sampler2D uTexture; uniform vec2 direction;
+void main(){
+  vec3 c  = texture(uTexture, vUv).rgb * 0.22702703;
+  c += texture(uTexture, vUv + direction * 1.38461538).rgb * 0.31621622;
+  c += texture(uTexture, vUv - direction * 1.38461538).rgb * 0.31621622;
+  c += texture(uTexture, vUv + direction * 3.23076923).rgb * 0.07027027;
+  c += texture(uTexture, vUv - direction * 3.23076923).rgb * 0.07027027;
+  fragColor = vec4(c, 1.0);
+}`;
+
+/* the display pass — sheen, aberration, moonlit spec, dither */
+const F_DISPLAY = HEAD + `
+uniform sampler2D uTexture; uniform sampler2D uBloom; uniform vec2 texelSize;
+uniform float bloomIntensity; uniform float time; uniform float reactive; uniform float moon;
+float hash(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+void main(){
+  vec3 c  = texture(uTexture, vUv).rgb;
+  vec3 lc = texture(uTexture, vL).rgb, rc = texture(uTexture, vR).rgb;
+  vec3 tc = texture(uTexture, vT).rgb, bc = texture(uTexture, vB).rgb;
+  float dx = length(rc) - length(lc);
+  float dy = length(tc) - length(bc);
+  vec3 n = normalize(vec3(dx, dy, 0.02 + 0.06 * (1.0 - moon)));
+  vec3 ldir = normalize(vec3(0.28, 0.46, 1.0));
+  float diffuse = clamp(dot(n, ldir) + 0.68 + 0.24 * moon, 0.62, 1.15);
+  float spec = pow(max(dot(reflect(-ldir, n), vec3(0.0, 0.0, 1.0)), 0.0),
+                   mix(18.0, 64.0, moon)) * (0.10 + 0.26 * moon);
+  /* chromatic aberration along the surface normal, widened by the score */
+  vec2 off = n.xy * (0.8 + reactive * 2.4) * texelSize * 2.6;
+  vec3 ca;
+  ca.r = texture(uTexture, vUv + off).r;
+  ca.g = c.g;
+  ca.b = texture(uTexture, vUv - off).b;
+  c = mix(c, ca, 0.65);
+  /* iridescent sheen on the crests */
+  float fres = pow(1.0 - clamp(n.z, 0.0, 1.0), 3.0);
+  vec3 sheen = 0.5 + 0.5 * cos(vec3(0.0, 2.1, 4.3) + fres * 7.5 + time * 0.16 + moon * 2.4);
+  c += sheen * fres * (0.045 + 0.05 * reactive);
+  c = c * diffuse + spec * min(length(c) * 1.6, 1.0);
+  c *= 1.0 + reactive * 0.16;
+  c += texture(uBloom, vUv).rgb * bloomIntensity;
+  c += (hash(gl_FragCoord.xy + fract(time)) - 0.5) / 240.0;
+  fragColor = vec4(max(c, 0.0), 1.0);
+}`;
+
+/* ---- bioluminescent motes: advected on the velocity field, drawn as additive glows ---- */
+const VERT_MOTES = `#version 300 es
+precision highp float; precision highp sampler2D;
+uniform sampler2D uPos;
+uniform sampler2D uVel;
+uniform int uW; uniform int uH;
+uniform vec2 uSize;
+uniform float uTime; uniform float uSparkle; uniform float uGain;
+uniform float uH0; uniform float uH1; uniform float uS;
+out vec2 vQuad; out vec4 vCol;
+vec3 hsv(float h, float s, float v){
+  h = fract(h);
+  vec3 p = vec3(abs(h * 6.0 - 3.0) - 1.0, 2.0 - abs(h * 6.0 - 3.0), 2.0 - abs(h * 6.0 - 1.0));
+  p = clamp(p, 0.0, 1.0);
+  return v * (p * (1.0 - s) + s);
+}
+void main(){
+  vec2 corner = vec2(float(gl_VertexID & 1) * 2.0 - 1.0, float(gl_VertexID >> 1) * 2.0 - 1.0);
+  vec2 cell = vec2(float(gl_InstanceID % uW), float(gl_InstanceID / uW));
+  vec2 uv = (cell + 0.5) / vec2(float(uW), float(uH));
+  vec4 p = textureLod(uPos, uv, 0.0);
+  vec2 vel = textureLod(uVel, p.xy, 0.0).xy;
+  float sp = length(vel);
+  float speed = clamp(sp / 1900.0, 0.0, 1.0);
+  float life = clamp(p.z, 0.0, 1.0);
+  float tw = 0.55 + 0.45 * sin(uTime * 2.7 + p.w * 42.0);
+  float halo = pow(speed, 1.15);
+  float a = (0.04 + 0.96 * halo) * tw * life * uGain + uSparkle * 0.22 * life * tw;
+  vec3 rgb = hsv(mix(uH0, uH1, fract(p.w + speed * 0.3)), uS, 1.0);
+  vCol = vec4(rgb * (0.32 + 0.95 * halo), clamp(a, 0.0, 1.0));
+  vec2 clip = p.xy * 2.0 - 1.0;
+  gl_Position = vec4(clip + corner * uSize, 0.0, 1.0);
+  vQuad = corner;
+}`;
+
+const FRAG_MOTES = `#version 300 es
+precision highp float;
+in vec2 vQuad; in vec4 vCol;
+out vec4 fragColor;
+void main(){
+  float d = length(vQuad);
+  float a = 1.0 - smoothstep(0.12, 1.0, d);
+  fragColor = vec4(vCol.rgb * pow(a, 1.55), vCol.a * pow(a, 2.4));
+}`;
+
+const F_PARTICLE_INIT = HEAD + `
+uniform float uSeed;
+float h21(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+void main(){
+  vec2 s = vUv * 91.7 + uSeed;
+  fragColor = vec4(h21(s), h21(s + 7.13), h21(s + 19.7), h21(s + 33.3));
+}`;
+
+const F_PARTICLE_UPDATE = HEAD + `
+uniform sampler2D uPos; uniform sampler2D uVel;
+uniform vec2 uTexel; uniform float uVelK;
+uniform float dt; uniform float time; uniform float drift;
+float h21(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+void main(){
+  vec4 p = texture(uPos, vUv);
+  vec2 vel = textureLod(uVel, p.xy, 0.0).xy;
+  float ang = h21(floor(p.xy * 240.0) + floor(time * 0.8) + p.w * 57.0) * 6.2831853;
+  vec2 wander = vec2(cos(ang), sin(ang)) * drift;
+  vec2 flow = vel * uTexel * uVelK;
+  vec2 next = p.xy + (flow + wander) * dt;
+  float life = p.z - dt * (0.09 + 0.5 * h21(p.xy * 13.0 + p.w * 7.0));
+  if (life <= 0.0) {
+    vec2 s = vUv * 131.3 + floor(time * 23.0) + p.w * 41.0;
+    next = vec2(h21(s), h21(s + 5.7));
+    life = 1.0;
+  }
+  fragColor = vec4(fract(next + 1.0), life, p.w);
+}`;
+
+/* ============================================================
+   PROGRAMS
+   ============================================================ */
+function compile(type, src) {
+  const sh = gl.createShader(type);
+  gl.shaderSource(sh, src);
+  gl.compileShader(sh);
+  if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
+    console.error(gl.getShaderInfoLog(sh), '\n', src);
+    throw new Error('shader compile failed');
+  }
+  return sh;
+}
+const blitVert = compile(gl.VERTEX_SHADER, VERT_BLIT);
+const moteVert = compile(gl.VERTEX_SHADER, VERT_MOTES);
+class Program {
+  constructor(fragSrc, vertSrc) {
+    const v = vertSrc || blitVert;
+    this.program = gl.createProgram();
+    gl.attachShader(this.program, v);
+    gl.attachShader(this.program, compile(gl.FRAGMENT_SHADER, fragSrc));
+    gl.linkProgram(this.program);
+    if (!gl.getProgramParameter(this.program, gl.LINK_STATUS)) {
+      console.error(gl.getProgramInfoLog(this.program));
+      throw new Error('program link failed');
+    }
+    this.u = {};
+    const n = gl.getProgramParameter(this.program, gl.ACTIVE_UNIFORMS);
+    for (let i = 0; i < n; i++) {
+      const name = gl.getActiveUniform(this.program, i).name.replace('[0]', '');
+      this.u[name] = gl.getUniformLocation(this.program, name);
+    }
+  }
+  use() { gl.useProgram(this.program); return this; }
+}
+
+const P = {
+  copy:      new Program(F_COPY),
+  clear:     new Program(F_CLEAR),
+  splat:     new Program(F_SPLAT),
+  advect:    new Program(F_ADVECT),
+  diverge:   new Program(F_DIVERGE),
+  curl:      new Program(F_CURL),
+  vort:      new Program(F_VORT),
+  pressure:  new Program(F_PRESSURE),
+  gradient:  new Program(F_GRADIENT),
+  bloomPre:  new Program(F_BLOOMPRE),
+  blur:      new Program(F_BLUR),
+  display:   new Program(F_DISPLAY),
+  pInit:     new Program(F_PARTICLE_INIT),
+  pUpdate:   new Program(F_PARTICLE_UPDATE),
+  motes:     new Program(FRAG_MOTES, moteVert),
+};
+
+/* ============================================================
+   GEOMETRY + BUFFERS
+   ============================================================ */
+const blitVAO = gl.createVertexArray();
+gl.bindVertexArray(blitVAO);
+const quad = new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]);
+const vbo = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+gl.bufferData(gl.ARRAY_BUFFER, quad, gl.STATIC_DRAW);
+gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+gl.enableVertexAttribArray(0);
+const ibo = gl.createBuffer();
+gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibo);
+gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array([0, 1, 2, 2, 1, 3]), gl.STATIC_DRAW);
+gl.bindVertexArray(null);
+
+const moteVAO = gl.createVertexArray();
+
+function blit(target) {
+  gl.bindVertexArray(blitVAO);
+  if (target) {
+    gl.bindFramebuffer(gl.FRAMEBUFFER, target.fbo);
+    gl.viewport(0, 0, target.width, target.height);
+  } else {
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+  }
+  gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
+}
+
+function createFBO(w, h, fmt, filter) {
+  gl.activeTexture(gl.TEXTURE0);
+  const texture = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, texture);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, filter);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filter);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.texImage2D(gl.TEXTURE_2D, 0, fmt.internal, w, h, 0, fmt.format, fmt.type || HALF, null);
+  const fbo = gl.createFramebuffer();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
+  gl.viewport(0, 0, w, h);
+  gl.clearColor(0, 0, 0, 1);
+  gl.clear(gl.COLOR_BUFFER_BIT);
+  return {
+    texture, fbo, width: w, height: h, texelSizeX: 1 / w, texelSizeY: 1 / h,
+    bind(id) { gl.activeTexture(gl.TEXTURE0 + id); gl.bindTexture(gl.TEXTURE_2D, texture); return id; },
+    free() { gl.deleteTexture(texture); gl.deleteFramebuffer(fbo); },
+  };
+}
+function createDouble(w, h, fmt, filter) {
+  let a = createFBO(w, h, fmt, filter), b = createFBO(w, h, fmt, filter);
+  return {
+    width: w, height: h, texelSizeX: 1 / w, texelSizeY: 1 / h,
+    get read() { return a; }, set read(v) { a = v; },
+    get write() { return b; }, set write(v) { b = v; },
+    swap() { const t = a; a = b; b = t; },
+  };
+}
+function resizeFBO(old, w, h, fmt, filter) {
+  const next = createFBO(w, h, fmt, filter);
+  P.copy.use();
+  gl.uniform1i(P.copy.u.uTexture, old.bind(0));
+  blit(next);
+  old.free();
+  return next;
+}
+function resizeDouble(d, w, h, fmt, filter) {
+  if (d.width === w && d.height === h) return d;
+  d.read = resizeFBO(d.read, w, h, fmt, filter);
+  d.write.free();
+  d.write = createFBO(w, h, fmt, filter);
+  d.width = w; d.height = h; d.texelSizeX = 1 / w; d.texelSizeY = 1 / h;
+  return d;
+}
+
+/* ============================================================
+   CONFIG
+   ============================================================ */
+const calm = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+const mobile = /Mobi|Android/i.test(navigator.userAgent) ||
+  (navigator.maxTouchPoints > 1 && Math.min(screen.width, screen.height) < 900);
+
+const CFG = {
+  SIM_RES: mobile ? 128 : 192,
+  DYE_RES: mobile ? 620 : 1180,
+  BLOOM_RES: 180,
+  DENSITY_LOSS: 0.82,
+  VELOCITY_LOSS: 0.24,
+  PRESSURE: 0.82,
+  PRESSURE_STEPS: mobile ? 14 : 22,
+  CURL: 28,
+  SPLAT_RADIUS: 0.24,
+  SPLAT_FORCE: 5800,
+  BLOOM: 0.58,
+  BLOOM_THRESHOLD: 0.5,
+  BLOOM_KNEE: 0.68,
+  PART_W: mobile ? 48 : 64,
+  PART_H: mobile ? 48 : 64,
+  MOTE_SIZE: mobile ? 5.5 : 7.0,
+  MOTE_DRIFT: 0.012,
+  MOTE_SPEED_K: 0.16,
+};
+
+let dye, velocity, divergence, curlF, pressure, bloomA, bloomB, particles;
+let moteLive = true, moteSeed = Math.random() * 100;
+
+function resolution(res) {
+  let aspect = gl.drawingBufferWidth / gl.drawingBufferHeight;
+  if (aspect < 1) aspect = 1 / aspect;
+  const short = Math.round(res), long = Math.round(res * aspect);
+  return gl.drawingBufferWidth > gl.drawingBufferHeight
+    ? { width: long, height: short }
+    : { width: short, height: long };
+}
+
+function initBuffers() {
+  const sim = resolution(CFG.SIM_RES), dyeR = resolution(CFG.DYE_RES), bl = resolution(CFG.BLOOM_RES);
+  gl.disable(gl.BLEND);
+  dye = dye ? resizeDouble(dye, dyeR.width, dyeR.height, FMT_RGBA, gl.LINEAR)
+            : createDouble(dyeR.width, dyeR.height, FMT_RGBA, gl.LINEAR);
+  velocity = velocity ? resizeDouble(velocity, sim.width, sim.height, FMT_RG, gl.LINEAR)
+                      : createDouble(sim.width, sim.height, FMT_RG, gl.LINEAR);
+  if (divergence) { divergence.free(); curlF.free(); pressure.read.free(); pressure.write.free(); bloomA.free(); bloomB.free(); particles.read.free(); particles.write.free(); }
+  divergence = createFBO(sim.width, sim.height, FMT_R, gl.NEAREST);
+  curlF      = createFBO(sim.width, sim.height, FMT_R, gl.NEAREST);
+  pressure   = createDouble(sim.width, sim.height, FMT_R, gl.NEAREST);
+  bloomA     = createFBO(bl.width, bl.height, FMT_RGBA, gl.LINEAR);
+  bloomB     = createFBO(bl.width, bl.height, FMT_RGBA, gl.LINEAR);
+  particles  = createDouble(CFG.PART_W, CFG.PART_H, FMT_PART, gl.NEAREST);
+  seedParticles();
+}
+function seedParticles() {
+  P.pInit.use();
+  gl.uniform1f(P.pInit.u.uSeed, moteSeed);
+  gl.clearColor(0, 0, 0, 1);
+  gl.clear(gl.COLOR_BUFFER_BIT);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, particles.read.fbo);
+  gl.viewport(0, 0, particles.width, particles.height);
+  gl.clear(gl.COLOR_BUFFER_BIT);
+  blit(particles.write); particles.swap();
+}
+function resizeCanvas() {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const w = Math.max(1, Math.floor(canvas.clientWidth * dpr));
+  const h = Math.max(1, Math.floor(canvas.clientHeight * dpr));
+  if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; return true; }
+  return false;
+}
+resizeCanvas();
+initBuffers();
+
+/* ============================================================
+   SPLATS + SIMULATION
+   ============================================================ */
+const radiusFix = r => (canvas.width / canvas.height > 1 ? r * canvas.width / canvas.height : r);
+
+function splat(x, y, dx, dy, color, radius = CFG.SPLAT_RADIUS) {
+  P.splat.use();
+  gl.uniform1f(P.splat.u.aspectRatio, canvas.width / canvas.height);
+  gl.uniform2f(P.splat.u.point, x, y);
+  gl.uniform1f(P.splat.u.radius, radiusFix(radius / 100));
+  gl.uniform1i(P.splat.u.uTarget, velocity.read.bind(0));
+  gl.uniform3f(P.splat.u.color, dx, dy, 0);
+  blit(velocity.write); velocity.swap();
+  gl.uniform1i(P.splat.u.uTarget, dye.read.bind(0));
+  gl.uniform3f(P.splat.u.color, color.r, color.g, color.b);
+  blit(dye.write); dye.swap();
+}
+function burst(x, y, color, strength = 1, n = 12) {
+  const c = { r: color.r * 0.5, g: color.g * 0.5, b: color.b * 0.5 };
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2 + Math.random() * 0.35;
+    const f = (880 + Math.random() * 520) * strength;
+    splat(x, y, Math.cos(a) * f, Math.sin(a) * f, c, 0.42 * strength);
+  }
+}
+function scatter(n) {
+  for (let i = 0; i < n; i++) {
+    splat(Math.random(), Math.random(),
+      950 * (Math.random() - 0.5), 950 * (Math.random() - 0.5),
+      ramp(Math.random() + hueDrift, 0.74), 0.45 + Math.random() * 0.45);
+  }
+}
+function calmSea() {
+  P.clear.use();
+  gl.uniform1f(P.clear.u.value, 0);
+  gl.uniform1i(P.clear.u.uTexture, dye.read.bind(0));
+  blit(dye.write); dye.swap();
+  gl.uniform1i(P.clear.u.uTexture, velocity.read.bind(0));
+  blit(velocity.write); velocity.swap();
+}
+
+function step(dt) {
+  gl.disable(gl.BLEND);
+  P.curl.use();
+  gl.uniform2f(P.curl.u.texelSize, velocity.texelSizeX, velocity.texelSizeY);
+  gl.uniform1i(P.curl.u.uVelocity, velocity.read.bind(0));
+  blit(curlF);
+
+  P.vort.use();
+  gl.uniform2f(P.vort.u.texelSize, velocity.texelSizeX, velocity.texelSizeY);
+  gl.uniform1i(P.vort.u.uVelocity, velocity.read.bind(0));
+  gl.uniform1i(P.vort.u.uCurl, curlF.bind(1));
+  gl.uniform1f(P.vort.u.curl, CFG.CURL);
+  gl.uniform1f(P.vort.u.dt, dt);
+  blit(velocity.write); velocity.swap();
+
+  P.diverge.use();
+  gl.uniform2f(P.diverge.u.texelSize, velocity.texelSizeX, velocity.texelSizeY);
+  gl.uniform1i(P.diverge.u.uVelocity, velocity.read.bind(0));
+  blit(divergence);
+
+  P.clear.use();
+  gl.uniform1i(P.clear.u.uTexture, pressure.read.bind(0));
+  gl.uniform1f(P.clear.u.value, CFG.PRESSURE);
+  blit(pressure.write); pressure.swap();
+
+  P.pressure.use();
+  gl.uniform2f(P.pressure.u.texelSize, velocity.texelSizeX, velocity.texelSizeY);
+  gl.uniform1i(P.pressure.u.uDivergence, divergence.bind(0));
+  for (let i = 0; i < CFG.PRESSURE_STEPS; i++) {
+    gl.uniform1i(P.pressure.u.uPressure, pressure.read.bind(1));
+    blit(pressure.write); pressure.swap();
+  }
+
+  P.gradient.use();
+  gl.uniform2f(P.gradient.u.texelSize, velocity.texelSizeX, velocity.texelSizeY);
+  gl.uniform1i(P.gradient.u.uPressure, pressure.read.bind(0));
+  gl.uniform1i(P.gradient.u.uVelocity, velocity.read.bind(1));
+  blit(velocity.write); velocity.swap();
+
+  P.advect.use();
+  gl.uniform2f(P.advect.u.texelSize, velocity.texelSizeX, velocity.texelSizeY);
+  const vId = velocity.read.bind(0);
+  gl.uniform1i(P.advect.u.uVelocity, vId);
+  gl.uniform1i(P.advect.u.uSource, vId);
+  gl.uniform1f(P.advect.u.dt, dt);
+  gl.uniform1f(P.advect.u.dissipation, CFG.VELOCITY_LOSS);
+  blit(velocity.write); velocity.swap();
+
+  gl.uniform1i(P.advect.u.uVelocity, velocity.read.bind(0));
+  gl.uniform1i(P.advect.u.uSource, dye.read.bind(1));
+  gl.uniform1f(P.advect.u.dissipation, CFG.DENSITY_LOSS * (1.22 - 0.44 * moonPhase));
+  blit(dye.write); dye.swap();
+}
+
+function updateMotes(dt, time) {
+  if (!moteLive) return;
+  P.pUpdate.use();
+  gl.uniform1i(P.pUpdate.u.uPos, particles.read.bind(0));
+  gl.uniform1i(P.pUpdate.u.uVel, velocity.read.bind(1));
+  gl.uniform2f(P.pUpdate.u.uTexel, velocity.texelSizeX, velocity.texelSizeY);
+  gl.uniform1f(P.pUpdate.u.uVelK, CFG.MOTE_SPEED_K);
+  gl.uniform1f(P.pUpdate.u.dt, dt);
+  gl.uniform1f(P.pUpdate.u.time, time);
+  gl.uniform1f(P.pUpdate.u.drift, CFG.MOTE_DRIFT * (calm ? 0.35 : 1));
+  blit(particles.write); particles.swap();
+}
+
+function bloom(source) {
+  P.bloomPre.use();
+  const knee = CFG.BLOOM_THRESHOLD * CFG.BLOOM_KNEE + 1e-4;
+  gl.uniform3f(P.bloomPre.u.curve, CFG.BLOOM_THRESHOLD - knee, knee * 2, 0.25 / knee);
+  gl.uniform1f(P.bloomPre.u.threshold, CFG.BLOOM_THRESHOLD);
+  gl.uniform1i(P.bloomPre.u.uTexture, source.bind(0));
+  blit(bloomA);
+  P.blur.use();
+  for (const s of [1, 2, 3]) {
+    gl.uniform1i(P.blur.u.uTexture, bloomA.bind(0));
+    gl.uniform2f(P.blur.u.direction, bloomA.texelSizeX * s, 0);
+    blit(bloomB);
+    gl.uniform1i(P.blur.u.uTexture, bloomB.bind(0));
+    gl.uniform2f(P.blur.u.direction, 0, bloomB.texelSizeY * s);
+    blit(bloomA);
+  }
+}
+
+function drawMotes(reactive) {
+  if (!moteLive) return;
+  gl.enable(gl.BLEND);
+  gl.blendEquation(gl.FUNC_ADD);
+  gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE, gl.ONE, gl.ONE);
+  P.motes.use();
+  gl.uniform1i(P.motes.u.uPos, particles.read.bind(0));
+  gl.uniform1i(P.motes.u.uVel, velocity.read.bind(1));
+  gl.uniform1i(P.motes.u.uW, particles.width);
+  gl.uniform1i(P.motes.u.uH, particles.height);
+  const px = CFG.MOTE_SIZE * (gl.drawingBufferHeight / 900);
+  gl.uniform2f(P.motes.u.uSize, px * 2 / gl.drawingBufferWidth, px * 2 / gl.drawingBufferHeight);
+  gl.uniform1f(P.motes.u.uTime, simClock);
+  gl.uniform1f(P.motes.u.uSparkle, reactive);
+  gl.uniform1f(P.motes.u.uGain, 1.0 + 0.45 * moonPhase);
+  gl.uniform1f(P.motes.u.uH0, hueOf(0.05));
+  gl.uniform1f(P.motes.u.uH1, hueOf(0.85));
+  gl.uniform1f(P.motes.u.uS, Math.min(1, palette.s + 0.05));
+  gl.bindVertexArray(moteVAO);
+  gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, particles.width * particles.height);
+  gl.bindVertexArray(blitVAO);
+  gl.disable(gl.BLEND);
+}
+
+function present(time, reactive) {
+  bloom(dye.read);
+  P.display.use();
+  gl.uniform2f(P.display.u.texelSize, 1 / gl.drawingBufferWidth, 1 / gl.drawingBufferHeight);
+  gl.uniform1i(P.display.u.uTexture, dye.read.bind(0));
+  gl.uniform1i(P.display.u.uBloom, bloomA.bind(1));
+  gl.uniform1f(P.display.u.bloomIntensity, CFG.BLOOM * (0.82 + 0.32 * moonPhase) + reactive * 0.12);
+  gl.uniform1f(P.display.u.time, time);
+  gl.uniform1f(P.display.u.reactive, reactive);
+  gl.uniform1f(P.display.u.moon, moonPhase);
+  blit(null);
+  drawMotes(reactive);
+}
+
+/* ============================================================
+   SOUND — a generative score that also stirs the sea
+   N cycles: Swell · Undertow · Trench · Corona · Silence
+   ============================================================ */
+const MUSIC = [
+  /* Swell — a long shore: filtered surf, a slow three-voice pad, far bells. A minor */
+  { name:'Swell', root:110.0, scale:[0, 2, 3, 7, 8], pluckOct:24, bells:[24, 27, 31, 34, 36, 39, 43],
+    start(S) {
+      const ctx = S.ctx, bus = S.makeBus(5), nodes = [], timers = [];
+      const surf = ctx.createBufferSource(); surf.buffer = S.noise(3); surf.loop = true;
+      const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 620; bp.Q.value = 0.75;
+      const sg = ctx.createGain(); sg.gain.value = 0.05;
+      const swell = ctx.createOscillator(); swell.frequency.value = 0.055;
+      const swellGain = ctx.createGain(); swellGain.gain.value = 0.045;
+      swell.connect(swellGain); swellGain.connect(sg.gain); swell.start(); nodes.push(swell);
+      const drift = ctx.createOscillator(); drift.frequency.value = 0.031;
+      const driftGain = ctx.createGain(); driftGain.gain.value = 380;
+      drift.connect(driftGain); driftGain.connect(bp.frequency); drift.start(); nodes.push(drift);
+      const pan = ctx.createStereoPanner(); pan.pan.value = -0.15;
+      surf.connect(bp); bp.connect(sg); sg.connect(pan); pan.connect(bus); surf.start(); nodes.push(surf);
+      const voices = [];
+      const chords = [[0, 7, 15], [8, 15, 20], [3, 10, 15], [10, 14, 19]];
+      chords[0].forEach((semi, i) => {
+        const g = ctx.createGain(); g.gain.value = 0.022;
+        const trem = ctx.createOscillator(); trem.frequency.value = 0.06 + i * 0.017;
+        const tg = ctx.createGain(); tg.gain.value = 0.011; trem.connect(tg); tg.connect(g.gain); trem.start(); nodes.push(trem);
+        const a = ctx.createOscillator(); a.type = 'sine'; a.frequency.value = S.freq(semi + 12);
+        const b = ctx.createOscillator(); b.type = 'triangle'; b.frequency.value = S.freq(semi + 12); b.detune.value = 7 - i * 4;
+        const sparkle = ctx.createOscillator(); sparkle.type = 'sine'; sparkle.frequency.value = S.freq(semi + 36); sparkle.detune.value = -6;
+        const sg2 = ctx.createGain(); sg2.gain.value = 0.18;
+        const p = ctx.createStereoPanner(); p.pan.value = (i - 1) * 0.5;
+        a.connect(g); b.connect(g); sparkle.connect(sg2); sg2.connect(g); g.connect(p); p.connect(bus);
+        a.start(); b.start(); sparkle.start(); nodes.push(a, b, sparkle);
+        voices.push({ a, b, sparkle });
+      });
+      let ci = 0;
+      const driftChord = () => {
+        ci = (ci + 1) % chords.length;
+        const now = ctx.currentTime;
+        voices.forEach((v, i) => {
+          const f = S.freq(chords[ci][i] + 12);
+          [[v.a, f], [v.b, f], [v.sparkle, f * 4]].forEach(([o, f2]) => {
+            o.frequency.cancelScheduledValues(now);
+            o.frequency.setValueAtTime(o.frequency.value, now);
+            o.frequency.exponentialRampToValueAtTime(f2, now + 3.2);
+          });
+        });
+        timers.push(setTimeout(driftChord, 14000 + Math.random() * 7000));
+      };
+      timers.push(setTimeout(driftChord, 16000));
+      const far = () => { S.bell(Math.random(), 0.32); timers.push(setTimeout(far, 9000 + Math.random() * 12000)); };
+      timers.push(setTimeout(far, 6000));
+      return S.stopper(bus, nodes, timers);
+    } },
+
+  /* Undertow — a pulse underneath: sub, soft kick, hats, a dorian arpeggio. D dorian */
+  { name:'Undertow', root:146.83, scale:[0, 2, 3, 7, 9], pluckOct:24, bells:[26, 29, 33, 36, 38, 41, 45],
+    start(S) {
+      const ctx = S.ctx, bus = S.makeBus(4), nodes = [], timers = [];
+      const bpm = 84, step = 60 / bpm / 4;
+      const pattern = [0, -1, 2, -1, 4, -1, 1, 3, 5, -1, 2, -1, 4, 6, -1, -1];
+      const chords = [[0, 3, 7], [9, 12, 16], [3, 7, 10], [7, 10, 14]];
+      const sub = (semi, t, len) => {
+        const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = S.freq(semi - 24);
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.linearRampToValueAtTime(0.20, t + 0.05);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + len);
+        const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 320;
+        o.connect(lp); lp.connect(g); g.connect(bus); o.start(t); o.stop(t + len + 0.05);
+      };
+      const kick = t => {
+        const o = ctx.createOscillator(); o.type = 'sine';
+        o.frequency.setValueAtTime(96, t); o.frequency.exponentialRampToValueAtTime(42, t + 0.13);
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.26, t + 0.006);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.3);
+        o.connect(g); g.connect(bus); o.start(t); o.stop(t + 0.34);
+      };
+      const hat = t => {
+        const n = ctx.createBufferSource(); n.buffer = S.noise(0.4);
+        const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 6200;
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.055, t + 0.002);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.06);
+        n.connect(hp); hp.connect(g); g.connect(bus); n.start(t); n.stop(t + 0.09);
+      };
+      const note = (semi, t, level) => {
+        const f = S.freq(semi);
+        const o = ctx.createOscillator(); o.type = 'triangle'; o.frequency.value = f;
+        const o2 = ctx.createOscillator(); o2.type = 'sine'; o2.frequency.value = f * 2; o2.detune.value = 5;
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(level, t + 0.008);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.55);
+        const p = ctx.createStereoPanner(); p.pan.value = Math.sin(f * 0.7) * 0.45;
+        o.connect(g); o2.connect(g); g.connect(p); p.connect(bus);
+        o.start(t); o2.start(t); o.stop(t + 0.6); o2.stop(t + 0.6);
+      };
+      let i = 0, next = ctx.currentTime + 0.12;
+      const tick = () => {
+        const now = ctx.currentTime;
+        if (next < now - 0.4) next = now + 0.05;
+        while (next < now + 0.22) {
+          const chord = chords[Math.floor(i / 16) % chords.length], s = i % 16;
+          if (s === 0) sub(chord[0], next, step * 14);
+          if (s === 0 || s === 10) kick(next);
+          if (s % 2 === 1) hat(next);
+          const idx = pattern[s];
+          if (idx >= 0) note(chord[idx % 3] + 24 + 12 * Math.floor(idx / 3), next, s % 4 === 0 ? 0.15 : 0.09);
+          next += step; i++;
+        }
+      };
+      tick(); timers.push(setInterval(tick, 45));
+      return S.stopper(bus, nodes, timers);
+    } },
+
+  /* Trench — the deep: sub, detuned saws breathing behind a curtain of filter, wind, far bells. E phrygian */
+  { name:'Trench', root:82.41, scale:[0, 1, 5, 7, 10], pluckOct:24, bells:[24, 25, 29, 31, 34, 36, 41],
+    start(S) {
+      const ctx = S.ctx, bus = S.makeBus(6), nodes = [], timers = [];
+      const sub = ctx.createOscillator(); sub.type = 'sine'; sub.frequency.value = S.freq(-12);
+      const subG = ctx.createGain(); subG.gain.value = 0.13; sub.connect(subG); subG.connect(bus); sub.start(); nodes.push(sub);
+      const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 230; lp.Q.value = 1.6;
+      const sawG = ctx.createGain(); sawG.gain.value = 0.055; lp.connect(sawG); sawG.connect(bus);
+      [[0, -9], [0, 9], [7, 4], [-5, -3]].forEach(([semi, det]) => {
+        const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = S.freq(semi); o.detune.value = det;
+        o.connect(lp); o.start(); nodes.push(o);
+      });
+      const breathe = ctx.createOscillator(); breathe.frequency.value = 0.048;
+      const bg = ctx.createGain(); bg.gain.value = 150; breathe.connect(bg); bg.connect(lp.frequency); breathe.start(); nodes.push(breathe);
+      const wind = ctx.createBufferSource(); wind.buffer = S.noise(2); wind.loop = true;
+      const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 480; bp.Q.value = 0.85;
+      const wg = ctx.createGain(); wg.gain.value = 0.035;
+      const gust = ctx.createOscillator(); gust.frequency.value = 0.037;
+      const gg = ctx.createGain(); gg.gain.value = 300; gust.connect(gg); gg.connect(bp.frequency); gust.start(); nodes.push(gust);
+      wind.connect(bp); bp.connect(wg); wg.connect(bus); wind.start(); nodes.push(wind);
+      const far = () => { S.bell(Math.random(), 0.3); timers.push(setTimeout(far, 7000 + Math.random() * 9000)); };
+      timers.push(setTimeout(far, 4500));
+      return S.stopper(bus, nodes, timers);
+    } },
+
+  /* Corona — the crown of the sea: high glass voices, vibrato shimmer, sparkles. A lydian */
+  { name:'Corona', root:220.0, scale:[0, 2, 4, 7, 9], pluckOct:24, bells:[36, 40, 43, 47, 48, 52, 55],
+    start(S) {
+      const ctx = S.ctx, bus = S.makeBus(4), nodes = [], timers = [], voices = [];
+      const chords = [[0, 4, 11], [9, 16, 19], [5, 12, 16], [7, 14, 19]];
+      chords[0].forEach((semi, i) => {
+        const g = ctx.createGain(); g.gain.value = 0.026;
+        const vib = ctx.createOscillator(); vib.frequency.value = 4.6 + i * 0.7;
+        const vg = ctx.createGain(); vg.gain.value = 3.2 + i; vib.connect(vg);
+        const a = ctx.createOscillator(); a.type = 'sine'; a.frequency.value = S.freq(semi + 12);
+        const b = ctx.createOscillator(); b.type = 'sine'; b.frequency.value = S.freq(semi + 12); b.detune.value = 5 - i * 3;
+        const glass = ctx.createOscillator(); glass.type = 'triangle'; glass.frequency.value = S.freq(semi + 48); glass.detune.value = -7;
+        const gg = ctx.createGain(); gg.gain.value = 0.12;
+        vib.start(); a.start(); b.start(); glass.start(); nodes.push(vib, a, b, glass);
+        vg.connect(a.detune); vg.connect(b.detune);
+        const p = ctx.createStereoPanner(); p.pan.value = (i - 1.5) * 0.45;
+        a.connect(g); b.connect(g); glass.connect(gg); gg.connect(g); g.connect(p); p.connect(bus);
+        voices.push({ a, b, glass });
+      });
+      let ci = 0;
+      const bloom = () => {
+        ci = (ci + 1) % chords.length;
+        const now = ctx.currentTime;
+        voices.forEach((v, i) => {
+          const f = S.freq(chords[ci][i] + 12);
+          [[v.a, f], [v.b, f], [v.glass, f * 4]].forEach(([o, f2]) => {
+            o.frequency.cancelScheduledValues(now);
+            o.frequency.setValueAtTime(o.frequency.value, now);
+            o.frequency.exponentialRampToValueAtTime(f2, now + 2.4);
+          });
+        });
+        timers.push(setTimeout(bloom, 9500 + Math.random() * 5000));
+      };
+      timers.push(setTimeout(bloom, 11000));
+      const sparkle = () => { S.pluck(Math.random(), 1, 0.45); timers.push(setTimeout(sparkle, 1300 + Math.random() * 2600)); };
+      timers.push(setTimeout(sparkle, 1800));
+      return S.stopper(bus, nodes, timers);
+    } },
+
+  /* Silence — no score, only the sounds the water makes under your hand */
+  { name:'Silence', root:146.83, scale:[0, 2, 4, 7, 9], pluckOct:12, bells:[24, 28, 31, 35, 38, 40, 43], start:null },
+];
+
+const Sound = {
+  ctx:null, master:null, filter:null, analyser:null, bins:null,
+  enabled:true, ready:false, modeIndex:0, current:null, lastPluck:0,
+  energy:{ bass:0, mid:0, high:0, total:0, beat:0 },
+  _noiseCache:null,
+  get mode() { return MUSIC[this.modeIndex]; },
+  freq(semi) { return this.mode.root * Math.pow(2, semi / 12); },
+  noiseCache: new Map(),
+  noise(seconds) {
+    const ctx = this.ctx, rate = ctx.sampleRate;
+    const key = Math.min(3, Math.max(0.05, seconds)).toFixed(2) + '@' + rate;
+    let buf = this.noiseCache.get(key);
+    if (buf) return buf;
+    const len = Math.max(1, Math.floor(rate * Number(key.split('@')[0])));
+    buf = ctx.createBuffer(1, len, rate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    this.noiseCache.set(key, buf);
+    return buf;
+  },
+  init() {
+    if (this.ctx) { if (this.ctx.state !== 'running' && this.ctx.resume) this.ctx.resume().catch(() => {}); return; }
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    let ctx;
+    try { ctx = new AC({ latencyHint:'interactive' }); }
+    catch (e) { try { ctx = new AC(); } catch (e2) { return; } }
+    if (!ctx) return;
+    this.ctx = ctx;
+    if (ctx.state !== 'running' && ctx.resume) ctx.resume().catch(() => {});
+    const setP = (param, v) => { try { if (param && typeof param.value === 'number') param.value = v; } catch (e) {} };
+
+    const master = this.master = ctx.createGain();
+    setP(master.gain, 0);
+
+    // glue: an optional compressor, bypassed when the engine has none
+    let tail = ctx.destination;
+    if (ctx.createDynamicsCompressor) {
+      try {
+        const comp = ctx.createDynamicsCompressor();
+        setP(comp.threshold, -16); setP(comp.knee, 24); setP(comp.ratio, 3.5);
+        setP(comp.attack, 0.012); setP(comp.release, 0.42); setP(comp.makeupGain, 1.1);
+        master.connect(comp); comp.connect(ctx.destination);
+        tail = comp;
+      } catch (e) { master.connect(ctx.destination); }
+    } else {
+      master.connect(ctx.destination);
+    }
+
+    // the ear that lets the score stir the sea
+    if (ctx.createAnalyser) {
+      try {
+        const analyser = this.analyser = ctx.createAnalyser();
+        try { analyser.fftSize = 512; } catch (e) {}
+        try { analyser.smoothingTimeConstant = 0.75; } catch (e) {}
+        tail.connect(analyser);
+        this.bins = new Uint8Array(analyser.frequencyBinCount);
+      } catch (e) { this.analyser = null; this.bins = null; }
+    }
+
+    // colour: a lowpass feeding a dry path and a generated convolution hall
+    const filter = this.filter = ctx.createBiquadFilter();
+    try { filter.type = 'lowpass'; } catch (e) {}
+    setP(filter.frequency, 1500); setP(filter.Q, 0.55);
+    const dry = ctx.createGain(); setP(dry.gain, 0.58);
+    filter.connect(dry); dry.connect(master);
+    if (ctx.createConvolver) {
+      try {
+        const conv = ctx.createConvolver();
+        conv.buffer = this.makeIR(4.1, 2.6);
+        try { conv.normalize = true; } catch (e) {}
+        const wet = ctx.createGain(); setP(wet.gain, 0.72);
+        filter.connect(conv); conv.connect(wet); wet.connect(master);
+      } catch (e) { /* dry signal only */ }
+    }
+
+    this.ready = true;
+    this.setEnabled(this.enabled, true);
+    this.startMode();
+  },
+  makeIR(seconds, decay) {
+    const rate = this.ctx.sampleRate, len = Math.floor(rate * seconds);
+    const buf = this.ctx.createBuffer(2, len, rate);
+    for (let c = 0; c < 2; c++) {
+      const d = buf.getChannelData(c);
+      for (let i = 0; i < len; i++) {
+        const x = i / len;
+        d[i] = (Math.random() * 2 - 1) * Math.pow(1 - x, decay) * (1 - 0.35 * Math.sin(x * 90 + c));
+      }
+    }
+    return buf;
+  },
+  makeBus(fade) {
+    const g = this.ctx.createGain();
+    g.gain.value = 0;
+    g.gain.linearRampToValueAtTime(1, this.ctx.currentTime + fade);
+    g.connect(this.filter);
+    return g;
+  },
+  stopper(bus, nodes, timers) {
+    const ctx = this.ctx;
+    return {
+      stop() {
+        const t = ctx.currentTime;
+        bus.gain.cancelScheduledValues(t);
+        bus.gain.setValueAtTime(bus.gain.value, t);
+        bus.gain.linearRampToValueAtTime(0, t + 2.2);
+        timers.forEach(clearTimeout);
+        setTimeout(() => { nodes.forEach(n => { try { n.stop(); } catch (e) {} }); try { bus.disconnect(); } catch (e) {} }, 2500);
+      }
+    };
+  },
+  startMode() {
+    if (this.current) { this.current.stop(); this.current = null; }
+    if (this.mode.start) this.current = this.mode.start(this);
+  },
+  setMode(i) {
+    this.modeIndex = ((i % MUSIC.length) + MUSIC.length) % MUSIC.length;
+    musicName.textContent = '♪ ' + this.mode.name;
+    if (this.ready) this.startMode();
+  },
+  setEnabled(on, force) {
+    this.enabled = on;
+    document.body.classList.toggle('silent', !on);
+    btnSound.classList.toggle('off', !on);
+    btnSound.setAttribute('aria-pressed', String(on));
+    if (this.ready && !force) {
+      const t = this.ctx.currentTime;
+      this.master.gain.cancelScheduledValues(t);
+      this.master.gain.setValueAtTime(this.master.gain.value, t);
+      this.master.gain.linearRampToValueAtTime(on ? 0.85 : 0, t + (on ? 1.4 : 0.6));
+    } else if (this.ready && force) {
+      this.master.gain.setValueAtTime(on ? 0.85 : 0, this.ctx.currentTime);
+    }
+  },
+  pluck(x, y, vel) {
+    if (!this.ready || !this.enabled) return;
+    const ctx = this.ctx, t = ctx.currentTime;
+    if (t - this.lastPluck < 0.07) return;
+    this.lastPluck = t;
+    const m = this.mode;
+    const idx = Math.min(9, Math.max(0, Math.floor(x * 10)));
+    const semi = m.scale[idx % 5] + 12 * Math.floor(idx / 5) + m.pluckOct + (y > 0.5 ? 12 : 0);
+    const f = this.freq(semi);
+    const v = 0.05 + Math.min(vel, 1) * 0.17;
+    const a = ctx.createOscillator(); a.type = 'sine'; a.frequency.value = f;
+    const b = ctx.createOscillator(); b.type = 'triangle'; b.frequency.value = f * 2; b.detune.value = 6;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(v, t + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 1.7);
+    const p = ctx.createStereoPanner(); p.pan.value = (x - 0.5) * 1.5;
+    const g2 = ctx.createGain(); g2.gain.value = 0.22;
+    a.connect(g); b.connect(g2); g2.connect(g); g.connect(p); p.connect(this.filter);
+    a.start(t); b.start(t); a.stop(t + 1.8); b.stop(t + 1.8);
+    this.filter.frequency.cancelScheduledValues(t);
+    this.filter.frequency.setTargetAtTime(1500 + Math.min(vel, 1) * 3400, t, 0.07);
+    this.filter.frequency.setTargetAtTime(1500, t + 0.22, 0.85);
+  },
+  bell(x, vel = 0.6) {
+    if (!this.ready || !this.enabled) return;
+    const ctx = this.ctx, t = ctx.currentTime, m = this.mode;
+    const semi = m.bells[Math.floor(Math.random() * m.bells.length)];
+    const f = this.freq(semi);
+    const carrier = ctx.createOscillator(); carrier.type = 'sine'; carrier.frequency.value = f;
+    const mod = ctx.createOscillator(); mod.type = 'sine'; mod.frequency.value = f * 2.76;
+    const modGain = ctx.createGain();
+    modGain.gain.setValueAtTime(f * 1.9, t);
+    modGain.gain.exponentialRampToValueAtTime(1, t + 0.9);
+    mod.connect(modGain); modGain.connect(carrier.frequency);
+    const g = ctx.createGain();
+    const amp = 0.05 + vel * 0.12;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(amp, t + 0.006);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 2.6 + Math.random());
+    const p = ctx.createStereoPanner(); p.pan.value = (x - 0.5) * 1.6;
+    carrier.connect(g); g.connect(p); p.connect(this.filter);
+    carrier.start(t); mod.start(t);
+    carrier.stop(t + 3.8); mod.stop(t + 3.8);
+  },
+  crash(vel = 1) {
+    if (!this.ready || !this.enabled) return;
+    const ctx = this.ctx, t = ctx.currentTime;
+    const n = ctx.createBufferSource(); n.buffer = this.noise(2.4);
+    const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 0.6;
+    bp.frequency.setValueAtTime(3400, t); bp.frequency.exponentialRampToValueAtTime(320, t + 1.1);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(0.14 * vel, t + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 1.5);
+    n.connect(bp); bp.connect(g); g.connect(this.filter);
+    n.start(t); n.stop(t + 1.7);
+    const boom = ctx.createOscillator(); boom.type = 'sine';
+    boom.frequency.setValueAtTime(72, t); boom.frequency.exponentialRampToValueAtTime(30, t + 0.55);
+    const bg = ctx.createGain();
+    bg.gain.setValueAtTime(0.0001, t); bg.gain.linearRampToValueAtTime(0.2 * vel, t + 0.02);
+    bg.gain.exponentialRampToValueAtTime(0.0001, t + 1.1);
+    boom.connect(bg); bg.connect(this.filter); boom.start(t); boom.stop(t + 1.2);
+  },
+  sample() {
+    if (!this.ready || !this.enabled || !this.analyser || !this.bins) {
+      const e = this.energy, k = 0.9;
+      e.bass *= k; e.mid *= k; e.high *= k; e.total *= k; e.beat *= k;
+      return e;
+    }
+    this.analyser.getByteFrequencyData(this.bins);
+    const b = this.bins, n = b.length;
+    const avg = (a, z) => { let s = 0, c = 0; for (let i = a; i < z && i < n; i++) { s += b[i]; c++; } return c ? s / c / 255 : 0; };
+    const e = this.energy;
+    const bass = avg(1, 7), mid = avg(7, 44), high = avg(44, Math.min(150, n));
+    const smooth = (prev, val, up, down) => prev + (val - prev) * (val > prev ? up : down);
+    const prevBass = e.bass;
+    e.bass = smooth(e.bass, bass, 0.5, 0.12);
+    e.mid  = smooth(e.mid, mid, 0.4, 0.1);
+    e.high = smooth(e.high, high, 0.45, 0.12);
+    e.total = e.bass * 0.5 + e.mid * 0.32 + e.high * 0.18;
+    e.beat = Math.max(e.beat * 0.9, Math.max(0, e.bass - prevBass) * 6);
+    return e;
+  },
+};
+
+/* ============================================================
+   CHROME REFERENCES + STATE
+   ============================================================ */
+const hudEl      = document.getElementById('hud');
+const introEl    = document.getElementById('intro');
+const toastEl    = document.getElementById('toast');
+const logEl      = document.getElementById('tideLog');
+const noglEl     = document.getElementById('nogl');
+const flashEl    = document.getElementById('flash');
+const batonEl    = document.getElementById('baton');
+const palName    = document.getElementById('palName');
+const musicName  = document.getElementById('musicName');
+const reactName  = document.getElementById('reactName');
+const btnSound   = document.getElementById('btnSound');
+const btnMusic   = document.getElementById('btnMusic');
+const btnReact   = document.getElementById('btnReact');
+const btnMotes   = document.getElementById('btnMotes');
+const moonEl     = document.getElementById('moon');
+const sparkCanvas= document.getElementById('spark');
+const sparkCtx   = sparkCanvas ? sparkCanvas.getContext('2d') : null;
+
+let moonPhase = 0.72;
+let simClock = 0, idle = 0, started = false;
+let reactiveOn = true, moteLiveOn = true, uiHidden = false;
+let wantCapture = false, hueDrift = 0, energyPeak = 0, fpsMark = 0;
+const history = new Float32Array(96);
+let historyHead = 0;
+
+/* ---------- toast & log ---------- */
+let toastTimer = 0;
+function toast(text) {
+  toastEl.textContent = text;
+  toastEl.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toastEl.classList.remove('show'), 1500);
+}
+const LOGS = {
+  wake:    ['the water wakes, and keeps your shape', 'a hand on the surface — the sea answers', 'the tide begins where your fingers end'],
+  stroke:  ['the sea learns the shape of your hand', 'currents bend toward your gesture', 'you draw; the water remembers', 'a wake, then a story'],
+  stone:   ['a stone; the water keeps the circle', 'one drop, ten rings of light', 'the sea counts every stone you throw'],
+  whirl:   ['a whirlpool opens its slow eye', 'the water turns, and thinks', 'something underneath is pulling'],
+  storm:   ['lightning, and the tide forgives', 'the sky signs the water tonight', 'a squall — and the motes write poems'],
+  calm:    ['the sea lies flat, and listens', 'still water, waiting for weather'],
+  palette: ['the water tries on a new dream', 'a different moon, a different sea', 'the tide changes colour, not mind'],
+  moon:    ['the moon leans in; the water follows', 'pull a little harder, says the moon', 'brighter now, the sea answers'],
+  idle:    ['the tide paints itself when no one watches', 'the sea rehearses without an audience', 'unseen, the water keeps composing', 'the deep drafts its own verses', 'nobody here — and still it moves'],
+  motes:   ['a cloud of small lights wakes', 'the motes take the current', 'plankton, lit from inside'],
+  react:   ['the score stirs the water', 'now the music has a tide', 'sound, made visible'],
+  mute:    ['the sea goes quiet under your hand', 'silence — only the water speaks'],
+};
+const pick = a => a[Math.floor(Math.random() * a.length)];
+let logTimer = 0;
+function say(text) {
+  if (!logEl) return;
+  logEl.classList.add('swap');
+  clearTimeout(logTimer);
+  logTimer = setTimeout(() => { logEl.textContent = text; logEl.classList.remove('swap'); }, 430);
+}
+
+/* ---------- moon ---------- */
+function setMoon(v) {
+  moonPhase = Math.max(0, Math.min(1, v));
+  if (moonEl) moonEl.style.setProperty('--m', moonPhase.toFixed(3));
+}
+
+/* ---------- sparkline ---------- */
+function drawSpark() {
+  if (!sparkCtx) return;
+  const w = sparkCanvas.width, h = sparkCanvas.height;
+  sparkCtx.clearRect(0, 0, w, h);
+  const n = history.length;
+  sparkCtx.lineWidth = 3;
+  sparkCtx.shadowColor = 'rgba(150,225,255,0.65)';
+  sparkCtx.shadowBlur = 5;
+  sparkCtx.lineJoin = 'round';
+  const grad = sparkCtx.createLinearGradient(0, 0, w, 0);
+  grad.addColorStop(0, 'rgba(110,200,250,0.42)');
+  grad.addColorStop(1, 'rgba(196,246,255,1)');
+  sparkCtx.strokeStyle = grad;
+  sparkCtx.beginPath();
+  for (let i = 0; i < n; i++) {
+    const v = history[(historyHead + i) % n];
+    const x = (i / (n - 1)) * w;
+    const y = h - 3 - v * (h - 7);
+    if (i === 0) sparkCtx.moveTo(x, y); else sparkCtx.lineTo(x, y);
+  }
+  sparkCtx.stroke();
+  sparkCtx.fillStyle = 'rgba(150,225,255,0.16)';
+  sparkCtx.lineTo(w, h); sparkCtx.lineTo(0, h); sparkCtx.closePath(); sparkCtx.fill();
+}
+function pushHistory(v) {
+  history[historyHead] = Math.max(0, Math.min(1, v));
+  historyHead = (historyHead + 1) % history.length;
+  drawSpark();
+}
+
+/* ---------- the conductor's baton ---------- */
+let batonX = -100, batonY = -100, batonTX = -100, batonTY = -100, batonHeld = false;
+function batonTo(clientX, clientY) { batonTX = clientX; batonTY = clientY; batonEl.classList.add('live'); }
+function batonRelease() { batonEl.classList.remove('live', 'held'); }
+
+/* ============================================================
+   GESTURES — currents, stones, whirlpools, storms
+   ============================================================ */
+const pointers = new Map();
+const rings = [];
+function uv(e) {
+  const r = canvas.getBoundingClientRect();
+  return { x: (e.clientX - r.left) / Math.max(1, r.width), y: 1 - (e.clientY - r.top) / Math.max(1, r.height) };
+}
+introEl.addEventListener('pointerdown', e => {
+  wake(e.clientX, e.clientY);
+  const p = uv(e);
+  dropStone(p.x, p.y);
+  batonTo(e.clientX, e.clientY);
+}, { passive: true });
+canvas.addEventListener('pointerdown', e => {
+  e.preventDefault();
+  try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
+  wake(e.clientX, e.clientY);
+  const p = uv(e);
+  pointers.set(e.pointerId, {
+    x: p.x, y: p.y, dx: 0, dy: 0, moved: false,
+    down: performance.now(), sx: p.x, sy: p.y, hue: Math.random(), swirl: 0, lastPluck: 0,
+  });
+  splat(p.x, p.y, 0, 0, ramp(p.x + hueDrift, 0.55), 0.28);
+  Sound.pluck(p.x, p.y, 0.55);
+  batonTo(e.clientX, e.clientY);
+  batonHeld = true; batonEl.classList.add('held');
+});
+canvas.addEventListener('pointermove', e => {
+  batonTo(e.clientX, e.clientY);
+  let ptr = pointers.get(e.pointerId);
+  if (!ptr) {
+    // a boundary event may have interrupted the stroke — pick the press back up while a button is down
+    if (!e.buttons) return;
+    const q = uv(e);
+    ptr = { x: q.x, y: q.y, dx: 0, dy: 0, moved: false, down: performance.now(),
+            sx: q.x, sy: q.y, hue: Math.random(), swirl: 0, lastPluck: 0 };
+    pointers.set(e.pointerId, ptr);
+  }
+  const p = uv(e);
+  ptr.dx = (p.x - ptr.x) * CFG.SPLAT_FORCE * 1.35;
+  ptr.dy = (p.y - ptr.y) * CFG.SPLAT_FORCE * 1.35;
+  const speed = Math.hypot(ptr.dx, ptr.dy);
+  if (speed > 40) {
+    ptr.moved = true;
+    const t = performance.now();
+    if (t - ptr.lastPluck > 90) { ptr.lastPluck = t; Sound.pluck(p.x, p.y, Math.min(1, speed / 2600)); }
+  }
+  ptr.x = p.x; ptr.y = p.y;
+});
+function dropPointer(e) {
+  const ptr = pointers.get(e.pointerId);
+  if (!ptr) return;
+  pointers.delete(e.pointerId);
+  const held = performance.now() - ptr.down;
+  const dist = Math.hypot(ptr.x - ptr.sx, ptr.y - ptr.sy);
+  if (held < 300 && dist < 0.014) dropStone(ptr.x, ptr.y);
+  if (!pointers.size) batonRelease();
+  batonHeld = false; batonEl.classList.remove('held');
+}
+canvas.addEventListener('pointerup', dropPointer);
+canvas.addEventListener('pointercancel', dropPointer);
+canvas.addEventListener('pointerleave', e => {
+  if (e.buttons) return;                        // still pressed: the stroke continues past the edge
+  if (pointers.get(e.pointerId)) dropPointer(e);
+});
+canvas.addEventListener('dblclick', e => { const p = uv(e); storm(p.x, p.y); });
+
+function applyVortex(x, y, phase, radius, force, hue, arms = 5) {
+  for (let i = 0; i < arms; i++) {
+    const a = phase + (i / arms) * Math.PI * 2;
+    splat(x + Math.cos(a) * radius, y + Math.sin(a) * radius * 0.92,
+      -Math.sin(a) * force, Math.cos(a) * force, ramp(hue, 0.34), 0.09);
+  }
+}
+function dropStone(x, y) {
+  rings.push({ x, y, t: 0, dur: 1.25, radius: 0.34 + Math.random() * 0.16, hue: Math.random() });
+  if (rings.length > 8) rings.shift();
+  const c = ramp(x + hueDrift, 0.9);
+  splat(x, y, 0, -260, c, 0.3);
+  Sound.bell(x, 0.95);
+  say(pick(LOGS.stone));
+}
+function storm(x = 0.5, y = 0.5) {
+  flashEl.style.setProperty('--fx', (x * 100).toFixed(1) + '%');
+  flashEl.style.setProperty('--fy', ((1 - y) * 100).toFixed(1) + '%');
+  flashEl.classList.remove('fire');
+  void flashEl.offsetWidth;
+  flashEl.classList.add('fire');
+  scatter(calm ? 8 : 16 + Math.floor(Math.random() * 10));
+  burst(x, y, ramp(Math.random() + hueDrift, 1), 1.25, 16);
+  applyVortex(x, y, Math.random() * 6.283, 0.12, 2300, Math.random() + hueDrift, 6);
+  applyVortex(x, y, Math.random() * 6.283, 0.22, 1500, Math.random() + hueDrift, 7);
+  Sound.crash(1);
+  Sound.bell(x, 1);
+  energyPeak = 1;
+  say(pick(LOGS.storm));
+}
+function ringStep(dt) {
+  for (let i = rings.length - 1; i >= 0; i--) {
+    const r = rings[i];
+    r.t += dt;
+    const k = Math.min(1, r.t / r.dur);
+    const ease = 1 - Math.pow(1 - k, 2.4);
+    const rad = 0.015 + ease * r.radius;
+    const fade = 1 - k;
+    const n = 11;
+    const c = ramp(r.hue + hueDrift, 0.55 * fade + 0.08);
+    const f = (1600 - 900 * k);
+    for (let j = 0; j < n; j++) {
+      const a = (j / n) * Math.PI * 2 + r.t * 0.7;
+      splat(r.x + Math.cos(a) * rad, r.y + Math.sin(a) * rad * 0.9,
+        Math.cos(a) * f, Math.sin(a) * f, c, 0.1);
+    }
+    if (k >= 1) rings.splice(i, 1);
+  }
+}
+
+/* ============================================================
+   DRIFTERS — the sea paints itself when nobody conducts
+   ============================================================ */
+const drifters = Array.from({ length: mobile || calm ? 2 : 3 }, (_, i) => ({
+  t: Math.random() * 100, seed: i * 8.13 + 2.7, x: 0.5, y: 0.5,
+  hue: Math.random(), hueTimer: Math.random() * 4,
+}));
+let drifterPulse = 1, breachTimer = 4;
+function drifterPath(d) {
+  const t = d.t, k = d.seed;
+  return {
+    x: 0.5 + 0.42 * Math.sin(t * 0.59 + k) * Math.cos(t * 0.21 + k * 1.6),
+    y: 0.5 + 0.40 * Math.cos(t * 0.44 + k * 0.5) * Math.sin(t * 0.28 + k),
+  };
+}
+function updateDrifters(dt) {
+  const want = idle > 2.6 && !calm ? 1 : 0;
+  drifterPulse += (want - drifterPulse) * Math.min(1, dt * 1.1);
+  for (const d of drifters) {
+    d.t += dt * 0.5;
+    const p = drifterPath(d);
+    if (drifterPulse < 0.02) { d.x = p.x; d.y = p.y; continue; }
+    d.hueTimer -= dt;
+    if (d.hueTimer < 0) { d.hue = Math.random(); d.hueTimer = 4 + Math.random() * 6; }
+    let dx = p.x - d.x, dy = p.y - d.y;
+    d.x = p.x; d.y = p.y;
+    splat(d.x, d.y, dx * CFG.SPLAT_FORCE * 1.1, dy * CFG.SPLAT_FORCE * 1.1,
+      ramp(d.hue + hueDrift + d.t * 0.02, 0.11 * drifterPulse), 0.16);
+  }
+  breachTimer -= dt * drifterPulse;
+  if (breachTimer < 0) {
+    breachTimer = 6 + Math.random() * 8;
+    const x = 0.15 + Math.random() * 0.7, y = 0.15 + Math.random() * 0.7;
+    burst(x, y, ramp(Math.random() + hueDrift, 0.68 * drifterPulse), 0.8 + Math.random() * 0.5, 11);
+    Sound.bell(x, 0.5);
+    say(pick(LOGS.idle));
+  }
+}
+
+/* ============================================================
+   THE TIDE LINK — the score stirs the water
+   ============================================================ */
+let swellCooldown = 0;
+function tideLink(dt, e) {
+  if (!reactiveOn || !Sound.ready || !Sound.enabled) return;
+  hueDrift += dt * 0.006 * (0.4 + e.mid * 2.2);
+  swellCooldown -= dt;
+  if (e.beat > 0.42 && swellCooldown <= 0) {
+    swellCooldown = 0.2;
+    const x = Math.random();
+    splat(x, 0.015 + Math.random() * 0.05, (Math.random() - 0.5) * 800,
+      1500 + e.bass * 2400, ramp(0.08 + Math.random() * 0.4 + hueDrift, 0.4), 0.34);
+    energyPeak = Math.max(energyPeak, 0.7);
+  } else if (e.bass > 0.30 && swellCooldown <= 0) {
+    swellCooldown = 0.13;
+    const x = Math.random();
+    splat(x, 0.03, (Math.random() - 0.5) * 520, 500 + e.bass * 1200,
+      ramp(0.25 + Math.random() * 0.3 + hueDrift, 0.26), 0.28);
+  }
+  if (e.high > 0.32 && swellCooldown <= -0.35) {
+    swellCooldown = 0.25;
+    const side = Math.random() < 0.5 ? 0.02 : 0.98;
+    splat(side, 0.2 + Math.random() * 0.6, (side < 0.5 ? 1 : -1) * (700 + e.high * 1500),
+      (Math.random() - 0.5) * 700, ramp(0.55 + Math.random() * 0.3 + hueDrift, 0.28), 0.26);
+  }
+}
+
+/* ============================================================
+   WAKE, PALETTE, KEYS
+   ============================================================ */
+function wake(clientX, clientY) {
+  Sound.init();                       // idempotent; also retries a suspended context inside the gesture
+  if (!started) {
+    started = true;
+    introEl.classList.add('hide');
+    Sound.setEnabled(Sound.enabled, true);
+    say(pick(LOGS.wake));
+  } else if (clientX != null) {
+    batonTo(clientX, clientY);
+  }
+  idle = 0;
+  document.body.classList.remove('idle');
+}
+function setPalette(i) {
+  palIndex = ((i % PALETTES.length) + PALETTES.length) % PALETTES.length;
+  palette = PALETTES[palIndex];
+  palName.textContent = palette.name;
+  document.documentElement.style.setProperty('--tint', palette.tint);
+  moteSeed = Math.random() * 100;
+  seedParticles();
+  say(pick(LOGS.palette));
+}
+
+window.addEventListener('keydown', e => {
+  if (e.repeat) return;
+  if (Sound.ctx && Sound.ctx.state === 'suspended') Sound.ctx.resume().catch(() => {});
+  const k = e.key.toLowerCase();
+  if (k === ' ') { e.preventDefault(); wake(); storm(0.25 + Math.random() * 0.5, 0.3 + Math.random() * 0.45); }
+  else if (k === 'p') { wake(); setPalette(palIndex + 1); }
+  else if (k === 'm') { wake(); Sound.setEnabled(!Sound.enabled); toast(Sound.enabled ? 'sound on' : 'sound off'); say(Sound.enabled ? pick(LOGS.wake) : pick(LOGS.mute)); }
+  else if (k === 'n') { wake(); Sound.setMode(Sound.modeIndex + 1); toast('♪ ' + Sound.mode.name); }
+  else if (k === 'r') { toggleReactive(); }
+  else if (k === 't') { toggleMotes(); }
+  else if (k === 'c') { wake(); calmSea(); toast('calm'); say(pick(LOGS.calm)); }
+  else if (k === 's') { wake(); wantCapture = true; }
+  else if (k === 'h') { uiHidden = !uiHidden; document.body.classList.toggle('hide-ui', uiHidden); }
+  else if (k === 'f') {
+    if (document.fullscreenElement) document.exitFullscreen();
+    else if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(() => {});
+  }
+  else if (k === '[') { wake(); setMoon(moonPhase - 0.09); say(pick(LOGS.moon)); }
+  else if (k === ']') { wake(); setMoon(moonPhase + 0.09); say(pick(LOGS.moon)); }
+  else if (k >= '1' && k <= '6') { wake(); setPalette(+k - 1); }
+});
+
+function toggleReactive() {
+  reactiveOn = !reactiveOn;
+  btnReact.classList.toggle('off', !reactiveOn);
+  btnReact.setAttribute('aria-pressed', String(reactiveOn));
+  reactName.textContent = reactiveOn ? '◐ tide-link on' : '◌ tide-link off';
+  toast(reactiveOn ? 'tide-link on' : 'tide-link off');
+  if (reactiveOn) say(pick(LOGS.react));
+}
+function toggleMotes() {
+  moteLiveOn = !moteLiveOn;
+  btnMotes.classList.toggle('off', !moteLiveOn);
+  btnMotes.setAttribute('aria-pressed', String(moteLiveOn));
+  toast(moteLiveOn ? 'motes awake' : 'motes asleep');
+  if (moteLiveOn) { moteSeed = Math.random() * 100; seedParticles(); say(pick(LOGS.motes)); }
+}
+btnSound.addEventListener('click', () => { wake(); Sound.setEnabled(!Sound.enabled); toast(Sound.enabled ? 'sound on' : 'sound off'); });
+btnMusic.addEventListener('click', () => { wake(); Sound.setMode(Sound.modeIndex + 1); toast('♪ ' + Sound.mode.name); });
+btnReact.addEventListener('click', () => { wake(); toggleReactive(); });
+btnMotes.addEventListener('click', () => { wake(); toggleMotes(); });
+window.addEventListener('resize', () => { if (resizeCanvas()) initBuffers(); });
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) { pointers.clear(); batonRelease(); }
+  else if (Sound.ctx && Sound.ctx.state === 'suspended') Sound.ctx.resume().catch(() => {});
+});
+flashEl.addEventListener('animationend', () => flashEl.classList.remove('fire'));
+
+/* ============================================================
+   CAPTURE
+   ============================================================ */
+function capture() {
+  wantCapture = false;
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  const name = 'lumen-tide-' + stamp + '.png';
+  const deliver = href => {
+    if (DEBUG) {
+      try {
+        document.documentElement.dataset.lumenShot = JSON.stringify({
+          kind: String(href).slice(0, 30), chars: href.length, name,
+        });
+      } catch (e) {}
+    }
+    const a = document.createElement('a');
+    a.href = href; a.download = name; a.rel = 'noopener';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => { try { URL.revokeObjectURL(href); } catch (e) {} }, 5000);
+  };
+  // read the pixels while the frame is still ours, and inside the key's activation window
+  try {
+    deliver(canvas.toDataURL('image/png'));
+  } catch (e) {
+    canvas.toBlob(blob => {
+      if (!blob) { toast('save failed'); return; }
+      deliver(URL.createObjectURL(blob));
+    }, 'image/png');
+  }
+  toast('saved');
+}
+
+/* ============================================================
+   MAIN LOOP
+   ============================================================ */
+scatter(10);
+burst(0.5, 0.5, ramp(0.3 + Math.random() * 0.4, 1), 1.15, 14);
+setMoon(moonPhase);
+setPalette(0);
+
+const DEBUG = new URLSearchParams(location.search).get('debug') === '1';
+function report() {
+  return {
+    moon: +moonPhase.toFixed(3), tideLink: reactiveOn, motes: moteLiveOn, palette: palette.name,
+    score: Sound.mode.name, soundOn: Sound.enabled, started, idle: +idle.toFixed(2),
+    fps: Math.round(fpsMark), rings: rings.length, pointers: pointers.size,
+    audio: Sound.ctx ? { state: Sound.ctx.state, sampleRate: Sound.ctx.sampleRate } : { state: 'none' },
+    energy: { bass: +Sound.energy.bass.toFixed(3), mid: +Sound.energy.mid.toFixed(3), high: +Sound.energy.high.toFixed(3), total: +Sound.energy.total.toFixed(3) },
+  };
+}
+if (DEBUG) {
+  window.__lumen = { Sound, CFG, palettes: PALETTES, report };
+  setInterval(() => { try { document.documentElement.dataset.lumenDebug = JSON.stringify(report()); } catch (e) {} }, 250);
+}
+
+let last = performance.now(), sparkTick = 0, logTick = 0;
+function frame(now) {
+  requestAnimationFrame(frame);
+  let dt = (now - last) / 1000;
+  last = now;
+  dt = Math.max(0, Math.min(dt, 1 / 30));
+  simClock += dt;
+  idle += dt;
+  if (idle > 3.5 && started) document.body.classList.add('idle');
+  if (resizeCanvas()) initBuffers();
+
+  const e = Sound.sample();
+  const reactive = Math.min(1, e.total * 1.7) * (reactiveOn && Sound.enabled ? 1 : 0);
+
+  /* baton easing */
+  batonX += (batonTX - batonX) * Math.min(1, dt * 16);
+  batonY += (batonTY - batonY) * Math.min(1, dt * 16);
+  const scale = 0.55 + 0.5 * reactive + (batonHeld ? 0.35 : 0);
+  batonEl.style.transform = `translate3d(${batonX}px,${batonY}px,0) translate(-50%,-50%) scale(${scale.toFixed(3)})`;
+
+  updateDrifters(dt);
+  tideLink(dt, e);
+  ringStep(dt);
+
+  /* whirlpools: hold still and the water starts to turn */
+  for (const ptr of pointers.values()) {
+    const held = (now - ptr.down) / 1000;
+    if (held > 0.34) {
+      ptr.swirl += dt * (1.6 + Math.min(2, held * 0.5));
+      applyVortex(ptr.x, ptr.y, ptr.swirl,
+        0.05 + Math.min(0.16, held * 0.03),
+        1500 + Math.min(2600, held * 900),
+        ptr.hue + hueDrift + ptr.swirl * 0.05, 5);
+      if (held > 1.2 && Math.random() < dt * 2.4) Sound.bell(ptr.x, 0.55);
+      if (held > 0.9 && Math.random() < dt * 1.2) say(pick(LOGS.whirl));
+    }
+    if (!ptr.moved) continue;
+    ptr.moved = false;
+    splat(ptr.x, ptr.y, ptr.dx, ptr.dy, ramp(ptr.x + hueDrift + Math.random() * 0.08, 0.72));
+  }
+
+  step(Math.max(dt, 1 / 120));
+  updateMotes(dt, simClock);
+  present(simClock, reactive);
+  if (wantCapture) capture();
+
+  /* readouts */
+  energyPeak = Math.max(energyPeak * (1 - dt * 1.6), reactive);
+  fpsMark = fpsMark + (1 / Math.max(dt, 1e-3) - fpsMark) * 0.02;
+  sparkTick += dt;
+  if (sparkTick > 0.09) { sparkTick = 0; pushHistory(Math.max(energyPeak, fpsMark < 45 ? 0.18 : 0)); }
+  logTick += dt;
+  if (logTick > (idle > 8 ? 11 : 26)) { logTick = 0; if (idle > 4) say(pick(LOGS.idle)); }
+}
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
