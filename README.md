@@ -117,8 +117,8 @@ iterations, mobile drops to 128 / 620 / 14 and a smaller mote field. Observed at
 
 - `index.html` — the piece. Everything is inline: markup, CSS, GLSL and JavaScript.
 - `README.md` — this file.
-- `shots/` — five frames: `01-idle`, `06-tuned-plankton`, `10-hero-iris`,
-  `11-hero-solar-corona`, `12-hero-plankton-storm`.
+- `shots/` — six frames: `01-idle`, `06-tuned-plankton`, `10-hero-iris`,
+  `11-hero-solar-corona`, `12-hero-plankton-storm`, `preview` (the social share card).
 - `shots/_process/` — intermediate frames from the tuning pass; kept locally, ignored by git.
 - `.nojekyll` — empty; tells Pages to copy files verbatim instead of building with Jekyll.
 
